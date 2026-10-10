@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Sunflower Pot</title>
+<!-- Telegram WebApp SDK -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+html,body{height:100%;margin:0}
+body{font-family:'Press Start 2P',monospace;font-size:9px;line-height:1.5;color:#3b2410;overflow:hidden;
+  display:flex;flex-direction:column;background:#528c27;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+/* Деревянные панели и кнопки */
+.wd{background:#a9713a;border:3px solid #3b2410;color:#fff3c4;font:inherit;font-size:9px;
+  box-shadow:inset 0 3px 0 #d9a066,inset 0 -3px 0 #7a4a1f;text-shadow:2px 2px 0 #3b2410}
+button.wd{cursor:pointer;padding:8px 4px}
+button.wd:active{transform:translateY(2px)}
+button:disabled{filter:grayscale(.8) brightness(.75);cursor:default}
+.pap{background:#f6e6b4;border:4px solid #8a5a2b;box-shadow:0 0 0 3px #3b2410,inset 0 0 0 2px #fff6d6}
+
+/* HUD */
+#top{display:flex;gap:6px;padding:8px;background:#6b4423;border-bottom:4px solid #3b2410;align-items:stretch}
+#top .box{flex:1;display:flex;align-items:center;justify-content:center;font-size:11px;background:#7b5230;
+  border:3px solid #3b2410;box-shadow:inset 0 3px 0 #5a381b;color:#ffe9a8;padding:6px 2px}
+#gear{width:44px;font-size:16px}
+#collect{background:#4f9a2c;box-shadow:inset 0 3px 0 #8ee060,inset 0 -3px 0 #2d6a14;font-size:10px;padding:0 8px}
+
+/* Сцена: забор + газон + грядка */
+#scene{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;align-items:center;
+  background:repeating-linear-gradient(90deg,#5e9e2e 0 32px,#528c27 32px 64px)}
+#fence{position:absolute;top:0;left:0;right:0;height:40%;
+  background:linear-gradient(rgba(255,160,90,.35),rgba(255,120,120,.1)),
+  linear-gradient(transparent 26%,#6e431c 26% 34%,transparent 34% 70%,#6e431c 70% 78%,transparent 78%),
+  repeating-linear-gradient(90deg,#b8814a 0 26px,#2a1808 26px 30px);border-bottom:6px solid #3b2410}
+#scene>*:not(#fence){position:relative}
+#rate{margin-top:14px;font-size:14px;color:#fff;text-shadow:3px 3px 0 #3b2410}
+#store{font-size:8px;color:#fff3c4;text-shadow:2px 2px 0 #3b2410;margin-top:4px}
+#bed{width:92%;max-width:380px;margin-top:10px;padding:10px 0 4px;display:flex;flex-direction:column;align-items:center;
+  border:12px solid #8a5a2b;outline:3px solid #3b2410;box-shadow:inset 0 0 0 3px #5a381b;
+  background:radial-gradient(#3a2010 2px,transparent 2.5px) 0 0/12px 12px,#4d2e16}
+#potWrap{width:min(34vh,210px);aspect-ratio:1;cursor:pointer;position:relative}
+#pot{width:100%;height:100%;image-rendering:pixelated;animation:bob 2s steps(2) infinite}
+@keyframes bob{50%{transform:translateY(-4px)}}
+#plate{width:min(86%,300px);margin-top:-14px;padding:8px;text-align:center;z-index:2}
+#rar{font-size:9px}#nm{font-size:11px;margin-top:4px}
+#bar{height:12px;background:#3b2410;padding:2px;margin-top:6px;display:none}
+#fill{height:100%;width:0;background:repeating-linear-gradient(90deg,#ffd93b 0 8px,#d9a800 8px 10px)}
+#acts{display:flex;gap:10px;margin-top:12px;width:min(86%,300px)}
+#acts button{flex:1;font-size:9px;padding:10px 4px}
+.float{position:absolute;left:35%;top:20%;color:#ffd93b;font-size:11px;text-shadow:2px 2px 0 #000;pointer-events:none;animation:up 1s steps(8) forwards}
+@keyframes up{to{transform:translateY(-60px);opacity:0}}
+
+/* Нижняя навигация */
+#nav{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:8px;background:#6b4423;border-top:4px solid #3b2410}
+#nav button{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:7px;padding:8px 0}
+#nav i{font-style:normal;font-size:22px;text-shadow:none}
+
+/* Окна */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:flex-end;justify-content:center;z-index:10}
+.ov.show{display:flex}
+#sheet{width:100%;max-width:420px;max-height:80vh;overflow:auto;padding:14px;margin:0 0 8px;color:#3b2410;line-height:1.7}
+#sheet h2{font-size:11px;margin:0 0 10px;display:flex;justify-content:space-between}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:2px dashed #b08a50}
+.row button{flex:none;width:96px}
+.row small{display:block;font-size:7px;opacity:.7}
+#grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:24px;background:#d8c28a;border:3px solid #a58a50;position:relative}
+.cell small{position:absolute;right:2px;bottom:0;font-size:7px}
+#reveal{align-items:center}
+#flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:11}
+#flash.go{animation:fl .9s steps(6)}
+@keyframes fl{0%{opacity:1}100%{opacity:0}}
+#card{text-align:center;padding:20px 14px;width:min(86vw,320px);border-color:var(--rc);animation:pop .5s steps(5)}
+@keyframes pop{from{transform:scale(.2) rotate(-8deg)}}
+#card .big{font-size:64px;line-height:1.2;margin:8px 0}
+</style>
+</head>
+<body>
+
+<!-- HUD -->
+<div id="top">
+  <button id="gear" class="wd" onclick="openTab('set')">⚙️</button>
+  <div class="box">☀ <span id="sun">0</span></div>
+  <div class="box">⭐ <span id="stars">0</span></div>
+  <button id="collect" class="wd" onclick="collect()">Собрать</button>
+</div>
+
+<!-- Сцена -->
+<div id="scene">
+  <div id="fence"></div>
+  <div id="rate"></div>
+  <div id="store"></div>
+  <div id="bed"><div id="potWrap"><canvas id="pot" width="16" height="16"></canvas></div></div>
+  <div id="plate" class="pap">
+    <div id="rar"></div><div id="nm"></div>
+    <div id="bar"><div id="fill"></div></div>
+  </div>
+  <div id="acts">
+    <button id="water" class="wd">💧 ПОЛИТЬ</button>
+    <button id="main" class="wd">🌱 ПОСАДИТЬ</button>
+  </div>
+</div>
+
+<!-- Навигация -->
+<div id="nav">
+  <button class="wd" onclick="openTab('inv')"><i>🎒</i>Инвентарь</button>
+  <button class="wd" onclick="openTab('shop')"><i>🏪</i>Магазин</button>
+  <button class="wd" onclick="openTab('up')"><i>⬆️</i>Улучшения</button>
+  <button class="wd" onclick="openTab('ev')"><i>🏆</i>Ивенты</button>
+</div>
+
+<div id="flash"></div>
+<div id="reveal" class="ov" onclick="this.classList.remove('show')"><div id="card" class="pap"></div></div>
+<div id="sheetOv" class="ov" onclick="if(event.target===this)closeSheet()"><div id="sheet" class="pap"></div></div>
+
+<script>
+/* ===== 1. Telegram WebApp ===== */
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) {
+  tg.ready(); tg.expand();                       // на весь экран
+  try { tg.setHeaderColor('#6b4423'); tg.setBackgroundColor('#528c27'); tg.disableVerticalSwipes(); } catch(e){}
+}
+const tgUser = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+const userName = tgUser ? (tgUser.first_name || tgUser.username) : 'Игрок (браузер)';
+// Тактильная отдача (можно отключить в настройках)
+function hap(kind){
+  const h = tg && tg.HapticFeedback; if (!h || !S.haptic) return;
+  if (kind==='tap') h.impactOccurred('light');
+  else if (kind==='hard') h.impactOccurred('heavy');
+  else if (kind==='ok') h.notificationOccurred('success');
+  else h.notificationOccurred('warning');
+}
+
+/* ===== 2. Данные: 32 подсолнуха ===== */
+const RARITY = {   // w — шанс в %, сумма = 100
+  common:{name:'Обычный (Common)',color:'#5b7d2a',w:50}, rare:{name:'Редкий (Rare)',color:'#2d77d4',w:32},
+  epic:{name:'Эпический (Epic)',color:'#8a3fd0',w:14}, legendary:{name:'Легендарный (Legendary)',color:'#d98a00',w:4}
+};
+// [название, иконка, редкость, солнц/сек]
+const SUNFLOWERS = [
+  ['Классик','🌻','common',.5],['Полевой','🌾','common',.5],['Медовый','🍯','common',.6],['Утренний','🌅','common',.6],
+  ['Лимонный','🍋','common',.7],['Кукурузный','🌽','common',.7],['Пчелиный','🐝','common',.8],['Банановый','🍌','common',.8],
+  ['Ореховый','🥜','common',.9],['Сырный','🧀','common',.9],['Цыплёнок','🐥','common',1],['Хлебный','🍞','common',1],
+  ['Каштановый','🌰','common',1.1],['Картофельный','🥔','common',1.1],['Осенний','🍂','common',1.2],['Вафельный','🧇','common',1.2],
+  ['Огненный','🔥','rare',2.5],['Арбузный','🍉','rare',2.5],['Клубничный','🍓','rare',3],['Черничный','🫐','rare',3],
+  ['Виноградный','🍇','rare',3.5],['Сакура','🌸','rare',3.5],['Мандариновый','🍊','rare',4],['Ледяной','🧊','rare',4],
+  ['Лунный','🌙','epic',7],['Звёздный','⭐','epic',8],['Грозовой','⚡','epic',8.5],['Радужный','🌈','epic',10],
+  ['Кибер-подсолнух','🕶️','epic',8.5],['Призрачный','👻','epic',12],
+  ['Королевский','👑','legendary',25],['Драконий','🐉','legendary',40]
+].map((a,i)=>({id:i,name:a[0],icon:a[1],rarity:a[2],rate:a[3],
+  petal:`hsl(${a[2]==='common'?38+(i%16)*1.2:(i*47)%360} 90% 55%)`}));
+
+/* ===== 3. Баланс ===== */
+const CFG = { growSec:90, waterBoost:10, waterCd:6, sunPerStar:500, boostStars:2, collectBonus:.2, baseStoreSec:1800 };
+const UPS = [  // улучшения за солнца
+  {k:'g',n:'Рост быстрее',d:'−8% времени роста',base:150},
+  {k:'i',n:'Больше солнц',d:'+10% дохода',base:250},
+  {k:'c',n:'Склад',d:'+30 мин хранения',base:200}
+];
+const upCost = u => Math.floor(u.base*Math.pow(1.7,S.up[u.k]));
+
+/* ===== 4. Состояние и сохранение ===== */
+const KEY = 'sunflower_save_v2_' + (tgUser ? tgUser.id : 'guest');
+let S = {sun:0,stars:0,store:0,phase:'empty',prog:0,vi:-1,found:{},up:{g:0,i:0,c:0},daily:'',haptic:true,ts:Date.now()};
+try { const d=JSON.parse(localStorage.getItem(KEY)||'{}'); Object.assign(S,d); S.up=Object.assign({g:0,i:0,c:0},d.up); } catch(e){}
+function save(){ S.ts=Date.now(); try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){} }
+
+const growSec = () => CFG.growSec*Math.pow(.92,S.up.g);
+const storeSec = () => CFG.baseStoreSec + 1800*S.up.c;
+function income(){          // цветок в горшке + бонус за коллекцию, умноженные на улучшение
+  let r = S.phase==='grown' && S.vi>=0 ? SUNFLOWERS[S.vi].rate : 0;
+  for (const id in S.found) r += SUNFLOWERS[id].rate*CFG.collectBonus;
+  return r*(1+.1*S.up.i);
+}
+
+/* ===== 5. Пиксель-арт цветка (canvas 16x16) ===== */
+const cv=document.getElementById('pot'), cx=cv.getContext('2d');
+const R=(c,x,y,w,h)=>{cx.fillStyle=c;cx.fillRect(x,y,w,h);};
+function drawPot(stage, f){
+  cx.clearRect(0,0,16,16);
+  R('#8b4513',3,13,10,3); R('#c46f30',2,11,12,2); R('#4a2c12',3,10,10,1); R('#6e3410',3,15,10,1);
+  const G='#3fa02a', GD='#2a7a1a';
+  if(stage===0) R('#2b1808',7,9,2,1);
+  if(stage===1){R(G,7,6,1,4);R(G,5,6,2,1);R(G,8,5,2,1);}
+  if(stage===2){R(G,7,4,2,6);R(GD,5,6,2,1);R(GD,9,7,2,1);R('#c8c82a',6,2,4,3);R(GD,6,1,4,1);}
+  if(stage===3){
+    R(G,7,7,2,4);R(GD,5,8,2,1);R(GD,9,9,2,1);
+    R(f.petal,6,0,4,7);R(f.petal,4,2,8,3);R(f.petal,5,1,6,5);
+    const hi = f.rarity==='epic'||f.rarity==='legendary';
+    R(hi?'#4b2a8a':f.rarity==='rare'?'#4a2a10':'#5a3410',6,2,4,3);
+    if(hi){R('#2ef0ff',5,3,6,1);R('#ff4bdc',6,3,4,1);}          // «очки» у эпиков и легенд
+    else {R('#1a0e04',6,3,1,1);R('#1a0e04',9,3,1,1);}           // глазки
+    R('#1a0e04',7,4,2,1);                                        // улыбка
+  }
+}
+
+/* ===== 6. Игровая логика ===== */
+const $=id=>document.getElementById(id);
+let waterReady=0;
+const fmt=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e4?(n/1e3).toFixed(1)+'K':Math.floor(n)+'';
+
+function plant(){ S.phase='growing';S.prog=0;S.vi=-1;hap('tap');save();render(); }
+function water(){
+  if(S.phase!=='growing'||Date.now()<waterReady) return hap('err');
+  S.prog=Math.min(100,S.prog+CFG.waterBoost); waterReady=Date.now()+CFG.waterCd*1000;
+  hap('tap'); floatText('💧+'+CFG.waterBoost+'%');
+  if(S.prog>=100) bloom(); render();
+}
+function roll(){   // 1) редкость по шансам, 2) случайный вид внутри неё
+  let r=Math.random()*100,acc=0,rar='common';
+  for(const k in RARITY){acc+=RARITY[k].w;if(r<acc){rar=k;break;}}
+  const pool=SUNFLOWERS.filter(f=>f.rarity===rar);
+  return pool[Math.floor(Math.random()*pool.length)];
+}
+function bloom(){
+  const f=roll(); S.phase='grown';S.prog=100;S.vi=f.id;
+  const isNew=!S.found[f.id]; S.found[f.id]=(S.found[f.id]||0)+1;
+  save();
+  $('flash').classList.remove('go');void $('flash').offsetWidth;$('flash').classList.add('go');
+  $('card').style.setProperty('--rc',RARITY[f.rarity].color);
+  $('card').innerHTML=`<div style="color:${RARITY[f.rarity].color}">${RARITY[f.rarity].name}</div>
+    <div class="big">${f.icon}</div><div style="font-size:12px">${f.name}</div>
+    <div style="margin-top:8px">☀ ${f.rate}/сек</div>
+    ${isNew?'<div style="margin-top:8px;color:#2a8a14">НОВЫЙ!</div>':''}
+    <div style="margin-top:12px;font-size:7px;opacity:.6">нажми, чтобы закрыть</div>`;
+  $('reveal').classList.add('show'); f.rarity==='common'?hap('ok'):hap('hard');
+}
+function collect(){       // забрать накопленные солнца со склада
+  if(S.store<1) return hap('err');
+  const g=Math.floor(S.store); S.sun+=g; S.store-=g; hap('ok'); floatText('☀+'+fmt(g)); save(); render();
+}
+function tapPot(){
+  hap('tap');
+  if(S.phase==='grown'){const g=Math.max(1,Math.round(income()));S.sun+=g;floatText('☀+'+g);}
+  else if(S.phase==='growing'){S.prog=Math.min(100,S.prog+.5);if(S.prog>=100)bloom();}
+  render();
+}
+function floatText(t){const e=document.createElement('div');e.className='float';e.textContent=t;$('potWrap').appendChild(e);setTimeout(()=>e.remove(),1000);}
+
+/* ===== 7. Окна: инвентарь, магазин, улучшения, ивенты, настройки ===== */
+let tab='';
+function closeSheet(){tab='';$('sheetOv').classList.remove('show');}
+function openTab(t){
+  tab=t; hap('tap'); let h='';
+  const head=(title)=>`<h2><span>${title}</span><span onclick="closeSheet()" style="cursor:pointer">✖</span></h2>`;
+  if(t==='inv'){
+    h=head(`ИНВЕНТАРЬ ${Object.keys(S.found).length}/32`)+'<div id="grid">'+SUNFLOWERS.map(f=>{
+      const n=S.found[f.id];
+      return `<div class="cell" style="border-color:${n?RARITY[f.rarity].color:'#a58a50'}">${n?f.icon:'?'}${n>1?`<small>x${n}</small>`:''}</div>`;
+    }).join('')+`</div><p style="font-size:7px">Каждый открытый цветок даёт ${CFG.collectBonus*100}% своей доходности пассивно.</p>`;
+  } else if(t==='shop'){
+    const n=Math.floor(S.sun/CFG.sunPerStar);
+    h=head('МАГАЗИН')+`<div class="row"><div>Обмен ☀→⭐<small>${CFG.sunPerStar}☀ = 1⭐</small></div>
+      <button class="wd" onclick="swap()" ${n?'':'disabled'}>${n?'+'+n+'⭐':'мало ☀'}</button></div>
+      <div class="row"><div>Удобрение<small>Мгновенно вырастить цветок</small></div>
+      <button class="wd" onclick="boost()" ${S.phase==='growing'&&S.stars>=CFG.boostStars?'':'disabled'}>${CFG.boostStars}⭐</button></div>`;
+  } else if(t==='up'){
+    h=head('УЛУЧШЕНИЯ')+UPS.map(u=>`<div class="row"><div>${u.n} ур.${S.up[u.k]}<small>${u.d}</small></div>
+      <button class="wd" onclick="buyUp('${u.k}')" ${S.sun>=upCost(u)?'':'disabled'}>${fmt(upCost(u))}☀</button></div>`).join('');
+  } else if(t==='ev'){
+    const can=S.daily!==new Date().toDateString();
+    h=head('ИВЕНТЫ')+`<div class="row"><div>Ежедневный подарок<small>300☀ + 1⭐ раз в день</small></div>
+      <button class="wd" onclick="daily()" ${can?'':'disabled'}>${can?'ЗАБРАТЬ':'ЗАВТРА'}</button></div>
+      <p style="font-size:7px;opacity:.7">Сезонные ивенты скоро…</p>`;
+  } else if(t==='set'){
+    h=head('НАСТРОЙКИ')+`<div class="row"><div>👤 ${userName}</div></div>
+      <div class="row"><div>Вибрация</div><button class="wd" onclick="S.haptic=!S.haptic;save();openTab('set')">${S.haptic?'ВКЛ':'ВЫКЛ'}</button></div>
+      <div class="row"><div>Сбросить прогресс</div><button class="wd" onclick="resetAll()">СБРОС</button></div>`;
+  }
+  $('sheet').innerHTML=h; $('sheetOv').classList.add('show');
+}
+function swap(){const n=Math.floor(S.sun/CFG.sunPerStar);if(!n)return;S.sun-=n*CFG.sunPerStar;S.stars+=n;hap('ok');save();render();openTab('shop');}
+function boost(){if(S.phase!=='growing'||S.stars<CFG.boostStars)return;S.stars-=CFG.boostStars;S.prog=100;bloom();render();closeSheet();}
+function buyUp(k){const u=UPS.find(x=>x.k===k);if(S.sun<upCost(u))return hap('err');S.sun-=upCost(u);S.up[k]++;hap('ok');save();render();openTab('up');}
+function daily(){S.daily=new Date().toDateString();S.sun+=300;S.stars+=1;hap('ok');save();render();openTab('ev');}
+function resetAll(){if(confirm('Удалить весь прогресс?')){localStorage.removeItem(KEY);location.reload();}}
+
+/* ===== 8. Отрисовка и цикл ===== */
+function render(){
+  const inc=income();
+  $('sun').textContent=fmt(S.sun); $('stars').textContent=S.stars;
+  $('rate').textContent=`${inc.toFixed(1)}/сек ☀`;
+  const cap=inc*storeSec();
+  $('store').textContent=inc>0?`Склад: ${fmt(S.store)} / ${fmt(cap)}${S.store>=cap-1?' (полон!)':''}`:'';
+  $('collect').disabled=S.store<1;
+  let stage=0,f=null,p=Math.floor(S.prog);
+  $('bar').style.display='none';
+  if(S.phase==='empty'){$('rar').textContent='';$('nm').textContent='Пустой горшок';}
+  else if(S.phase==='growing'){
+    stage=p<25?0:p<50?1:2;
+    $('rar').textContent=['Семечко спит','Появился росток','Растёт бутон'][stage];
+    $('nm').textContent=`Уход: ${p}%`;
+    $('bar').style.display='block'; $('fill').style.width=S.prog+'%';
+  } else {
+    f=SUNFLOWERS[S.vi]; stage=3;
+    $('rar').textContent=RARITY[f.rarity].name; $('rar').style.color=RARITY[f.rarity].color;
+    $('nm').textContent=f.name;
+  }
+  if(S.phase!=='grown') $('rar').style.color='#3b2410';
+  $('pot').style.filter=f&&f.rarity!=='common'?`drop-shadow(0 0 8px ${RARITY[f.rarity].color})`:'none';
+  drawPot(stage,f);
+  const growing=S.phase==='growing', cd=Math.ceil((waterReady-Date.now())/1000);
+  $('water').style.display=growing?'':'none';
+  $('water').disabled=cd>0; $('water').textContent=cd>0?`💧 ${cd}с`:'💧 ПОЛИТЬ';
+  $('main').style.display=growing?'none':'';
+  $('main').textContent=S.phase==='grown'?'🌱 ПЕРЕСАДИТЬ':'🌱 ПОСАДИТЬ';
+}
+let last=Math.max(S.ts||Date.now(),Date.now()-12*3600*1000),saveT=0;
+function tick(){
+  const now=Date.now(),dt=(now-last)/1000;last=now;
+  if(S.phase==='growing'){S.prog=Math.min(100,S.prog+dt*100/growSec());if(S.prog>=100)bloom();}
+  const inc=income(); S.store=Math.min(inc*storeSec(),S.store+inc*dt);   // склад копит солнца до лимита
+  render(); if((saveT+=dt)>3){saveT=0;save();}
+  if(tab==='shop'||tab==='up') {/* кнопки обновляются при действиях */}
+}
+
+/* ===== 9. События и старт ===== */
+$('water').onclick=water;
+$('main').onclick=plant;
+$('potWrap').onclick=tapPot;
+document.addEventListener('visibilitychange',save);
+window.addEventListener('pagehide',save);
+tick(); setInterval(tick,100);
+</script>
+</body>
+</html>
