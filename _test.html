@@ -1,0 +1,1831 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Sunflower Growth</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      margin: 0;
+      padding: 0;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body { height: 100%; }
+
+    body {
+      background-color: #0b0f07;
+      font-family: 'Press Start 2P', monospace;
+      overflow: hidden;
+    }
+
+    input { user-select: text; -webkit-user-select: text; }
+
+    .game-container {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      background: #0b0f07;
+    }
+
+    /* ===== Игровое поле: сетка 720x1280, как нарисован фон ===== */
+    .stage {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 720px;
+      height: 1280px;
+      transform-origin: 0 0;
+      background: url('bg.jpg') 0 0 / 720px 1280px no-repeat;
+      overflow: hidden;
+    }
+
+    /* Счётчики в нарисованных слотах */
+    .hud-slot {
+      position: absolute;
+      top: 32px;
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: #fff;
+      font-size: 22px;
+      line-height: 1;
+      text-shadow: 3px 3px 0 #000;
+      pointer-events: none;
+      z-index: 5;
+    }
+    #hudSuns  { left: 144px; width: 205px; }
+    #hudStars { left: 365px; width: 146px; }
+    .hud-ico { font-size: 26px; text-shadow: none; line-height: 1; }
+    .hud-num { padding-top: 3px; }
+
+    .bump { animation: bump .38s ease-out; }
+    @keyframes bump {
+      0% { transform: scale(1); }
+      40% { transform: scale(1.18); }
+      100% { transform: scale(1); }
+    }
+
+    /* Шестерёнка (настройки) */
+    .gear-btn {
+      position: absolute;
+      left: 31px;
+      top: 26px;
+      width: 94px;
+      height: 94px;
+      border-radius: 50%;
+      background: transparent;
+      border: 0;
+      z-index: 30;
+      cursor: pointer;
+    }
+    .gear-btn:active { background: rgba(255,255,255,.18); transform: scale(.92) rotate(40deg); transition: transform .12s; }
+
+    /* Кнопка "Собрать" */
+    .collect-btn {
+      position: absolute;
+      left: 530px;
+      top: 32px;
+      width: 156px;
+      height: 78px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      line-height: 1;
+      color: #fff;
+      text-shadow: 2px 2px 0 #1b4d11;
+      overflow: hidden;
+      cursor: pointer;
+      z-index: 25;
+    }
+    .collect-btn .txt { position: relative; z-index: 2; padding-top: 3px; }
+    .collect-btn .cd-fill {
+      position: absolute;
+      inset: 0;
+      background: rgba(25, 25, 25, .62);
+      transform-origin: right center;
+      transform: scaleX(0);
+      transition: transform .3s linear;
+      z-index: 1;
+    }
+    .collect-btn:active { transform: scale(.95); }
+    .collect-btn.disabled { cursor: default; }
+    .collect-btn.disabled .txt { color: #e4e4e4; text-shadow: 2px 2px 0 #000; }
+    .collect-btn.ready { animation: readyPulse 1.3s ease-in-out infinite; }
+    .collect-btn.ready::after {
+      content: '';
+      position: absolute;
+      top: -20%;
+      left: -60%;
+      width: 40%;
+      height: 140%;
+      background: linear-gradient(100deg, transparent, rgba(255,255,255,.55), transparent);
+      transform: skewX(-18deg);
+      animation: shine 2.2s ease-in-out infinite;
+      z-index: 3;
+    }
+    @keyframes readyPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(180,255,130,0); transform: scale(1); }
+      50% { box-shadow: 0 0 26px 6px rgba(190,255,140,.8); transform: scale(1.05); }
+    }
+    @keyframes shine {
+      0% { left: -60%; }
+      55%, 100% { left: 130%; }
+    }
+
+    /* Накопленные солнышки */
+    .storage-info {
+      position: absolute;
+      left: 0;
+      top: 150px;
+      width: 720px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      pointer-events: none;
+      z-index: 5;
+    }
+    .pending-counter {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 26px;
+      line-height: 1;
+      color: #ffe600;
+      text-shadow: 3px 3px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;
+    }
+    .income-tag {
+      font-size: 17px;
+      line-height: 1;
+      color: #fff;
+      text-shadow: 2px 2px 0 #000;
+    }
+    .boost-tag {
+      display: none;
+      font-size: 17px;
+      line-height: 1;
+      color: #9dff7a;
+      text-shadow: 2px 2px 0 #000;
+      animation: boostBlink 1s ease-in-out infinite;
+    }
+    .boost-tag.on { display: block; }
+    @keyframes boostBlink { 50% { opacity: .55; } }
+
+    /* Цветок */
+    .flower-zone {
+      position: absolute;
+      left: 160px;
+      top: 250px;
+      width: 400px;
+      height: 560px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      z-index: 3;
+    }
+    .flower-shadow {
+      position: absolute;
+      left: 50%;
+      bottom: -6px;
+      width: 250px;
+      height: 40px;
+      margin-left: -125px;
+      border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(0,0,0,.34), transparent 70%);
+      animation: shadowSway 3.2s ease-in-out infinite;
+    }
+    @keyframes shadowSway {
+      0%, 100% { transform: scaleX(1); opacity: .9; }
+      50% { transform: scaleX(.88); opacity: .6; }
+    }
+    .flower-aura {
+      position: absolute;
+      left: 50%;
+      bottom: 70px;
+      width: 420px;
+      height: 420px;
+      margin-left: -210px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--aura, transparent) 0%, transparent 68%);
+      opacity: 0;
+      pointer-events: none;
+      animation: auraPulse 3s ease-in-out infinite;
+    }
+    @keyframes auraPulse {
+      0%, 100% { transform: scale(.9); }
+      50% { transform: scale(1.1); }
+    }
+    .flower-img {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center bottom;
+      image-rendering: pixelated;
+      transform-origin: 50% 100%;
+      animation: sway 3.2s ease-in-out infinite;
+      cursor: pointer;
+    }
+    @keyframes sway {
+      0%, 100% { transform: rotate(-1.6deg) translateY(0); }
+      50% { transform: rotate(1.6deg) translateY(-8px); }
+    }
+    .flower-img.squash { animation: squash .45s ease-out; }
+    @keyframes squash {
+      0% { transform: scale(1, 1); }
+      25% { transform: scale(1.14, .86); }
+      55% { transform: scale(.94, 1.1); }
+      100% { transform: scale(1, 1); }
+    }
+    .flower-img.popin { animation: popin .65s cubic-bezier(.2, 1.5, .4, 1); }
+    @keyframes popin {
+      0% { transform: scale(.35) rotate(-12deg); opacity: 0; }
+      100% { transform: scale(1) rotate(0); opacity: 1; }
+    }
+
+    /* Табличка с названием (нарисована на фоне) */
+    .flower-info {
+      position: absolute;
+      left: 150px;
+      top: 850px;
+      width: 424px;
+      height: 160px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 22px;
+      pointer-events: none;
+      z-index: 5;
+    }
+    .tier-title {
+      font-size: 16px;
+      line-height: 1;
+      white-space: nowrap;
+      text-shadow: 1px 1px 0 rgba(255,255,255,.35);
+    }
+    .flower-title {
+      display: inline-block;
+      font-size: 26px;
+      line-height: 1;
+      white-space: nowrap;
+      color: #1e1308;
+      text-shadow: 2px 2px 0 rgba(255,255,255,.3);
+    }
+
+    /* Кнопки нижнего меню (картинки нарисованы на фоне) */
+    .nav-btn {
+      position: absolute;
+      top: 1082px;
+      width: 156px;
+      height: 190px;
+      border-radius: 20px;
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      z-index: 30;
+      transition: transform .1s, background .1s;
+    }
+    .nav-btn:active { transform: scale(.93); background: rgba(255,255,255,.16); }
+    .badge {
+      position: absolute;
+      top: 4px;
+      right: 8px;
+      min-width: 38px;
+      height: 38px;
+      padding: 0 6px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      border-radius: 20px;
+      background: #e53935;
+      border: 4px solid #fff;
+      color: #fff;
+      font-size: 16px;
+      line-height: 1;
+      font-family: inherit;
+      animation: badgeBounce 1.2s ease-in-out infinite;
+    }
+    .badge.on { display: flex; }
+    @keyframes badgeBounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-7px); }
+    }
+
+    /* Эффекты */
+    .fx { position: absolute; inset: 0; pointer-events: none; z-index: 20; overflow: hidden; }
+    .float-text {
+      position: absolute;
+      font-size: 30px;
+      line-height: 1;
+      color: #ffe600;
+      white-space: nowrap;
+      text-shadow: 3px 3px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;
+      animation: floatUp 1.2s ease-out forwards;
+    }
+    @keyframes floatUp {
+      0% { transform: translate(-50%, 20px) scale(.6); opacity: 0; }
+      20% { transform: translate(-50%, 0) scale(1.15); opacity: 1; }
+      100% { transform: translate(-50%, -130px) scale(1); opacity: 0; }
+    }
+    .fly-sun { position: absolute; font-size: 34px; line-height: 1; margin: -17px 0 0 -17px; }
+    .dot {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      margin: -7px 0 0 -7px;
+      background: #ffe066;
+      box-shadow: 0 0 10px #ffd000;
+    }
+    .sparkle {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      margin: -7px 0 0 -7px;
+      background: var(--c, #fff);
+      box-shadow: 0 0 12px var(--c, #fff);
+      transform: rotate(45deg);
+      animation: sparkleUp 1.4s ease-out forwards;
+    }
+    @keyframes sparkleUp {
+      0% { transform: translateY(0) rotate(45deg) scale(0); opacity: 0; }
+      25% { opacity: 1; transform: translateY(-14px) rotate(135deg) scale(1.2); }
+      100% { transform: translateY(-70px) rotate(270deg) scale(0); opacity: 0; }
+    }
+    .motes { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+    .mote {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background: #fff6a8;
+      box-shadow: 0 0 8px #ffe066;
+      opacity: 0;
+      animation: moteRise var(--d, 9s) linear infinite;
+      animation-delay: var(--dl, 0s);
+    }
+    @keyframes moteRise {
+      0% { transform: translate(0, 0); opacity: 0; }
+      15% { opacity: .85; }
+      50% { transform: translate(24px, -150px); }
+      85% { opacity: .6; }
+      100% { transform: translate(-10px, -300px); opacity: 0; }
+    }
+    .nofx .mote, .nofx .flower-aura, .nofx .sparkle { display: none; }
+    .nofx .flower-img, .nofx .flower-shadow, .nofx .collect-btn.ready, .nofx .collect-btn.ready::after, .nofx .badge { animation: none; }
+
+    /* ===== Всплывающие подсказки ===== */
+    .toasts {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 78px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      pointer-events: none;
+      z-index: 400;
+    }
+    .toast {
+      max-width: 90%;
+      padding: 10px 12px;
+      font-size: 9px;
+      line-height: 1.6;
+      text-align: center;
+      color: #fff;
+      background: #3b2210;
+      border: 3px solid #1a0d05;
+      border-radius: 8px;
+      box-shadow: 0 4px 0 rgba(0,0,0,.5);
+      animation: toastIn .28s cubic-bezier(.2, 1.4, .4, 1);
+    }
+    .toast.ok { background: #2f7a22; border-color: #164010; }
+    .toast.err { background: #8a2a2a; border-color: #4a1111; }
+    .toast.sun { background: #7a5a12; border-color: #3d2c06; color: #ffe9a0; }
+    .toast.out { opacity: 0; transform: translateY(-14px); transition: all .3s; }
+    @keyframes toastIn {
+      0% { transform: translateY(-24px) scale(.85); opacity: 0; }
+      100% { transform: translateY(0) scale(1); opacity: 1; }
+    }
+
+    /* ===== Модальные окна (в обычных пикселях экрана) ===== */
+    .modal-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(8, 4, 2, .8);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 14px;
+    }
+    .modal-overlay.pop { animation: fadeIn .2s ease-out; }
+    .modal-overlay.pop .modal-box { animation: boxIn .32s cubic-bezier(.2, 1.4, .4, 1); }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes boxIn {
+      0% { transform: scale(.82) translateY(24px); opacity: 0; }
+      100% { transform: scale(1) translateY(0); opacity: 1; }
+    }
+
+    .modal-box {
+      width: 100%;
+      max-width: 360px;
+      max-height: 88%;
+      background: #6e4120;
+      border: 4px solid #2a1506;
+      border-radius: 10px;
+      padding: 14px;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 6px 0 #120902;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      line-height: 1;
+      border-bottom: 3px solid #4a2810;
+      padding-bottom: 10px;
+    }
+    .modal-close {
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      color: #ff9494;
+      padding: 6px 8px;
+    }
+    .modal-close:active { transform: scale(.85); }
+
+    .tabs-row { display: flex; gap: 6px; }
+    .tab-btn {
+      flex: 1;
+      background: #462610;
+      border: 3px solid #231206;
+      color: #cfc2b0;
+      font-family: inherit;
+      font-size: 8px;
+      line-height: 1;
+      padding: 10px 2px;
+      cursor: pointer;
+      border-radius: 6px;
+    }
+    .tab-btn.active { background: #8e582d; color: #fff; border-color: #ffd700; }
+
+    .scroll-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 340px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+
+    .list-card {
+      display: grid;
+      grid-template-columns: 52px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      background: #4a2912;
+      border: 3px solid #231206;
+      padding: 8px;
+      border-radius: 8px;
+    }
+    .list-card.flash { animation: cardFlash .6s ease-out; }
+    @keyframes cardFlash {
+      0% { background: #7bd35c; transform: scale(1.03); }
+      100% { background: #4a2912; transform: scale(1); }
+    }
+    .card-ico {
+      width: 52px;
+      height: 62px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,.22);
+      border-radius: 6px;
+      font-size: 26px;
+      line-height: 1;
+      overflow: hidden;
+    }
+    .card-ico img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; object-position: center bottom; }
+    .card-body { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+    .card-title { font-size: 10px; line-height: 1.4; }
+    .card-sub { font-size: 8px; line-height: 1.5; color: #d9c3a5; }
+    .card-price { font-size: 9px; line-height: 1.4; color: #ffe600; }
+    .hint { font-size: 8px; line-height: 1.7; color: #ffe600; }
+
+    .action-btn {
+      background: #3e8e2b;
+      border: 3px solid #1c4d11;
+      color: #fff;
+      font-family: inherit;
+      font-size: 9px;
+      line-height: 1;
+      min-width: 88px;
+      padding: 11px 6px;
+      text-align: center;
+      cursor: pointer;
+      border-radius: 6px;
+      box-shadow: 0 3px 0 #1c4d11;
+    }
+    .action-btn:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 #1c4d11; }
+    .action-btn:disabled { background: #555; border-color: #333; box-shadow: 0 3px 0 #333; cursor: default; color: #bbb; }
+    .action-btn.dim { background: #6d5a45; border-color: #3a2c1c; box-shadow: 0 3px 0 #3a2c1c; color: #d4c7b5; }
+    .action-btn.wide { width: 100%; }
+    .action-btn.red { background: #b33939; border-color: #6b1b1b; box-shadow: 0 3px 0 #6b1b1b; }
+    .action-btn.blue { background: #2d6fb3; border-color: #143d66; box-shadow: 0 3px 0 #143d66; }
+
+    .promo-input {
+      background: #2a1506;
+      border: 3px solid #8e582d;
+      color: #ffd700;
+      font-family: inherit;
+      font-size: 12px;
+      padding: 12px;
+      width: 100%;
+      text-transform: uppercase;
+      border-radius: 6px;
+      text-align: center;
+    }
+
+    /* Настройки */
+    .set-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-size: 10px;
+      line-height: 1.4;
+      padding: 8px 0;
+      border-bottom: 2px solid rgba(0,0,0,.2);
+    }
+    .set-val { font-size: 8px; text-align: right; line-height: 1.5; color: #d9c3a5; }
+    .set-val.good { color: #9dff7a; }
+    .set-val.warn { color: #ffd37a; }
+    .set-val.bad { color: #ff8f8f; }
+    .switch {
+      position: relative;
+      width: 58px;
+      height: 30px;
+      flex: none;
+      border: 3px solid #231206;
+      background: #462610;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .switch::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      background: #a69886;
+      border-radius: 3px;
+      transition: left .15s, background .15s;
+    }
+    .switch.on { background: #3e8e2b; }
+    .switch.on::after { left: 31px; background: #fff; }
+    .ver { font-size: 7px; color: #b89c7a; text-align: center; line-height: 1.6; }
+
+    /* Выпал новый цветок */
+    .reveal {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 300;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background: radial-gradient(circle at 50% 40%, rgba(20,10,4,.6), rgba(0,0,0,.94));
+      padding: 20px;
+      text-align: center;
+      overflow: hidden;
+    }
+    .reveal.show { display: flex; animation: fadeIn .25s ease-out; }
+    .rays {
+      position: absolute;
+      width: 720px;
+      height: 720px;
+      left: 50%;
+      top: 38%;
+      margin: -360px 0 0 -360px;
+      border-radius: 50%;
+      background: repeating-conic-gradient(rgba(255, 226, 120, .24) 0 9deg, transparent 9deg 18deg);
+      -webkit-mask-image: radial-gradient(circle, #000 12%, transparent 62%);
+      mask-image: radial-gradient(circle, #000 12%, transparent 62%);
+      animation: spin 14s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .reveal > * { position: relative; }
+    .reveal .rays { position: absolute; }
+    .reveal-title { font-size: 16px; line-height: 1.4; color: #ffe600; text-shadow: 3px 3px 0 #000; }
+    .reveal.show .reveal-title { animation: dropIn .5s cubic-bezier(.2, 1.5, .4, 1) both; }
+    .reveal-img {
+      width: 220px;
+      height: 290px;
+      object-fit: contain;
+      object-position: center bottom;
+      image-rendering: pixelated;
+      filter: drop-shadow(0 0 22px rgba(255, 230, 130, .55));
+    }
+    .reveal.show .reveal-img { animation: revealPop .9s cubic-bezier(.2, 1.6, .4, 1) both; }
+    .reveal-name { font-size: 18px; line-height: 1.3; text-shadow: 3px 3px 0 #000; }
+    .reveal-tier { font-size: 10px; line-height: 1.4; color: #fff; text-shadow: 2px 2px 0 #000; }
+    .reveal-rate { font-size: 10px; line-height: 1.4; color: #ffe600; text-shadow: 2px 2px 0 #000; }
+    .reveal-note { font-size: 8px; line-height: 1.6; color: #cfc2b0; }
+    .reveal.show .reveal-name, .reveal.show .reveal-tier, .reveal.show .reveal-rate, .reveal.show .reveal-note { animation: dropIn .5s .35s cubic-bezier(.2, 1.4, .4, 1) both; }
+    .reveal .action-btn { margin-top: 8px; min-width: 160px; font-size: 11px; padding: 14px 10px; }
+    @keyframes revealPop {
+      0% { transform: scale(0) rotate(-20deg); opacity: 0; }
+      60% { transform: scale(1.25) rotate(6deg); opacity: 1; }
+      100% { transform: scale(1) rotate(0); }
+    }
+    @keyframes dropIn {
+      0% { transform: translateY(-26px) scale(.8); opacity: 0; }
+      100% { transform: translateY(0) scale(1); opacity: 1; }
+    }
+    .confetti { position: absolute; left: 50%; top: 38%; width: 12px; height: 12px; margin: -6px 0 0 -6px; z-index: 5; }
+
+    /* Экран загрузки */
+    .loading {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: #1b2a14;
+      color: #ffe600;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 22px;
+      font-size: 12px;
+      line-height: 1;
+    }
+    .loading .sun { font-size: 48px; animation: spin 2.4s linear infinite; }
+  </style>
+</head>
+<body>
+
+  <div class="game-container" id="app">
+
+    <div class="stage" id="stage">
+      <div class="motes" id="motes"></div>
+
+      <div class="hud-slot" id="hudSuns"><span class="hud-ico">☀️</span><span class="hud-num" id="sunCount">0</span></div>
+      <div class="hud-slot" id="hudStars"><span class="hud-ico">⭐</span><span class="hud-num" id="starCount">0</span></div>
+
+      <button class="gear-btn" id="btnSettings" aria-label="Настройки"></button>
+
+      <div class="collect-btn" id="claimBtn">
+        <span class="cd-fill" id="cdFill"></span>
+        <span class="txt" id="claimText">Собрать</span>
+      </div>
+
+      <div class="storage-info">
+        <div class="pending-counter"><span>Готово: +<span id="pendingCount">0.0</span></span><span>☀️</span></div>
+        <div class="income-tag"><span id="incomeRate">0.000</span>/сек</div>
+        <div class="boost-tag" id="boostTag"></div>
+      </div>
+
+      <div class="flower-zone">
+        <div class="flower-aura" id="flowerAura"></div>
+        <div class="flower-shadow"></div>
+        <img id="plantSprite" src="flowers/gardener.png" class="flower-img" alt="Sunflower">
+      </div>
+
+      <div class="flower-info">
+        <div class="tier-title" id="tierLabel" style="color: #2f8f1f;">Обычный (Common)</div>
+        <div class="flower-title" id="nameLabel">Садовод</div>
+      </div>
+
+      <button class="nav-btn" id="btnInv" style="left:28px"><span class="badge" id="badgeInv"></span></button>
+      <button class="nav-btn" id="btnShop" style="left:198px"></button>
+      <button class="nav-btn" id="btnUpgrades" style="left:368px"><span class="badge" id="badgeUp">!</span></button>
+      <button class="nav-btn" id="btnEvents" style="left:538px"></button>
+
+      <div class="fx" id="fxLayer"></div>
+    </div>
+
+    <!-- Модалка: Инвентарь -->
+    <div class="modal-overlay" id="inventoryModal">
+      <div class="modal-box">
+        <div class="modal-header">
+          <span>Инвентарь</span>
+          <span class="modal-close" id="closeInv">✕</span>
+        </div>
+        <div class="tabs-row">
+          <button class="tab-btn active" id="tabFlowers">Цветы</button>
+          <button class="tab-btn" id="tabSeeds">Семена</button>
+          <button class="tab-btn" id="tabBoosts">Подкормка</button>
+        </div>
+        <div class="scroll-list" id="invList"></div>
+        <button class="action-btn red wide" id="btnOpenPromo">🔑 Ввести промокод</button>
+      </div>
+    </div>
+
+    <!-- Модалка: Улучшения -->
+    <div class="modal-overlay" id="upgradesModal">
+      <div class="modal-box">
+        <div class="modal-header">
+          <span>Улучшения</span>
+          <span class="modal-close" id="closeUpgrades">✕</span>
+        </div>
+        <div class="scroll-list" id="upgradesList"></div>
+      </div>
+    </div>
+
+    <!-- Модалка: Магазин -->
+    <div class="modal-overlay" id="shopModal">
+      <div class="modal-box">
+        <div class="modal-header">
+          <span>Магазин ⭐</span>
+          <span class="modal-close" id="closeShop">✕</span>
+        </div>
+        <div class="scroll-list" id="shopList"></div>
+      </div>
+    </div>
+
+    <!-- Модалка: Промокоды -->
+    <div class="modal-overlay" id="promoModal">
+      <div class="modal-box">
+        <div class="modal-header">
+          <span>Промокод</span>
+          <span class="modal-close" id="closePromo">✕</span>
+        </div>
+        <input type="text" id="promoInput" class="promo-input" placeholder="ВВЕДИТЕ КОД" autocomplete="off">
+        <button class="action-btn wide" id="btnApplyPromo">Активировать</button>
+      </div>
+    </div>
+
+    <!-- Модалка: Настройки -->
+    <div class="modal-overlay" id="settingsModal">
+      <div class="modal-box">
+        <div class="modal-header">
+          <span>Настройки</span>
+          <span class="modal-close" id="closeSettings">✕</span>
+        </div>
+        <div>
+          <div class="set-row"><span>🔊 Звук</span><div class="switch" id="sw_sound"></div></div>
+          <div class="set-row"><span>📳 Вибрация</span><div class="switch" id="sw_haptic"></div></div>
+          <div class="set-row"><span>✨ Эффекты</span><div class="switch" id="sw_fx"></div></div>
+          <div class="set-row"><span>Игрок</span><span class="set-val" id="setUid">гость</span></div>
+          <div class="set-row"><span>Сохранение</span><span class="set-val" id="setCloud">...</span></div>
+        </div>
+        <button class="action-btn blue wide" id="btnSaveNow">☁️ Сохранить сейчас</button>
+        <button class="action-btn red wide" id="btnSettingsPromo">🔑 Промокод</button>
+        <div class="ver">Sunflower Growth v1.3<br>Прогресс привязан к твоему аккаунту Telegram</div>
+      </div>
+    </div>
+
+    <!-- Выпал цветок -->
+    <div class="reveal" id="revealOverlay">
+      <div class="rays"></div>
+      <div class="reveal-title" id="revealTitle">НОВЫЙ ЦВЕТОК!</div>
+      <img class="reveal-img" id="revealImg" src="flowers/gardener.png" alt="">
+      <div class="reveal-name" id="revealName"></div>
+      <div class="reveal-tier" id="revealTier"></div>
+      <div class="reveal-rate" id="revealRate"></div>
+      <div class="reveal-note" id="revealNote"></div>
+      <button class="action-btn" id="revealOk">Отлично!</button>
+    </div>
+
+    <div class="toasts" id="toasts"></div>
+  </div>
+
+  <script>
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      try { tg.ready(); tg.expand(); } catch (e) {}
+      try { if (tg.disableVerticalSwipes) tg.disableVerticalSwipes(); } catch (e) {}
+      try { if (tg.setHeaderColor) tg.setHeaderColor('#1d0b05'); if (tg.setBackgroundColor) tg.setBackgroundColor('#1d0b05'); } catch (e) {}
+    }
+
+    const $ = (id) => document.getElementById(id);
+
+    // Все сообщения теперь показываются красивыми подсказками внутри игры
+    function notify(msg) { toast(msg, 'info', 3800); }
+
+    // Адрес твоего сервера оплаты (Cloudflare Worker), см. инструкцию
+    const BACKEND_URL = 'http://localhost:8787';
+
+    const ALL_FLOWERS = {
+      gardener: { id: 'gardener', name: 'Садовод', tier: 'Обычный (Common)', tierKey: 'common', color: '#4cd137', baseRate: 0.1, img: 'flowers/gardener.png', fallbackFilter: 'hue-rotate(199deg) saturate(1.5)' },
+      miner: { id: 'miner', name: 'Шахтёр', tier: 'Обычный (Common)', tierKey: 'common', color: '#4cd137', baseRate: 0.1, img: 'flowers/miner.png', fallbackFilter: 'hue-rotate(279deg) saturate(1.5)' },
+      cook: { id: 'cook', name: 'Повар', tier: 'Обычный (Common)', tierKey: 'common', color: '#4cd137', baseRate: 0.1, img: 'flowers/cook.png', fallbackFilter: 'hue-rotate(201deg) saturate(1.5)' },
+      fisher: { id: 'fisher', name: 'Рыбак', tier: 'Обычный (Common)', tierKey: 'common', color: '#4cd137', baseRate: 0.11, img: 'flowers/fisher.png', fallbackFilter: 'hue-rotate(313deg) saturate(1.5)' },
+      farmer: { id: 'farmer', name: 'Фермер', tier: 'Обычный (Common)', tierKey: 'common', color: '#4cd137', baseRate: 0.12, img: 'flowers/farmer.png', fallbackFilter: 'hue-rotate(275deg) saturate(1.5)' },
+      postman: { id: 'postman', name: 'Почтальон', tier: 'Обычный (Common)', tierKey: 'common', color: '#4cd137', baseRate: 0.12, img: 'flowers/postman.png', fallbackFilter: 'hue-rotate(42deg) saturate(1.5)' },
+      painter: { id: 'painter', name: 'Художник', tier: 'Обычный (Common)', tierKey: 'common', color: '#4cd137', baseRate: 0.13, img: 'flowers/painter.png', fallbackFilter: 'hue-rotate(131deg) saturate(1.5)' },
+      camper: { id: 'camper', name: 'Турист', tier: 'Обычный (Common)', tierKey: 'common', color: '#4cd137', baseRate: 0.14, img: 'flowers/camper.png', fallbackFilter: 'hue-rotate(328deg) saturate(1.5)' },
+      lumberjack: { id: 'lumberjack', name: 'Лесоруб', tier: 'Обычный (Common)', tierKey: 'common', color: '#4cd137', baseRate: 0.15, img: 'flowers/lumberjack.png', fallbackFilter: 'hue-rotate(32deg) saturate(1.5)' },
+      pirate: { id: 'pirate', name: 'Пират', tier: 'Необычный (Uncommon)', tierKey: 'uncommon', color: '#00a8ff', baseRate: 0.16, img: 'flowers/pirate.png', fallbackFilter: 'hue-rotate(39deg) saturate(1.5)' },
+      knight: { id: 'knight', name: 'Рыцарь', tier: 'Необычный (Uncommon)', tierKey: 'uncommon', color: '#00a8ff', baseRate: 0.17, img: 'flowers/knight.png', fallbackFilter: 'hue-rotate(322deg) saturate(1.5)' },
+      ninja: { id: 'ninja', name: 'Ниндзя', tier: 'Необычный (Uncommon)', tierKey: 'uncommon', color: '#00a8ff', baseRate: 0.18, img: 'flowers/ninja.png', fallbackFilter: 'hue-rotate(259deg) saturate(1.5)' },
+      cowboy: { id: 'cowboy', name: 'Ковбой', tier: 'Необычный (Uncommon)', tierKey: 'uncommon', color: '#00a8ff', baseRate: 0.19, img: 'flowers/cowboy.png', fallbackFilter: 'hue-rotate(45deg) saturate(1.5)' },
+      viking: { id: 'viking', name: 'Викинг', tier: 'Необычный (Uncommon)', tierKey: 'uncommon', color: '#00a8ff', baseRate: 0.2, img: 'flowers/viking.png', fallbackFilter: 'hue-rotate(322deg) saturate(1.5)' },
+      diver: { id: 'diver', name: 'Дайвер', tier: 'Необычный (Uncommon)', tierKey: 'uncommon', color: '#00a8ff', baseRate: 0.22, img: 'flowers/diver.png', fallbackFilter: 'hue-rotate(106deg) saturate(1.5)' },
+      detective: { id: 'detective', name: 'Детектив', tier: 'Необычный (Uncommon)', tierKey: 'uncommon', color: '#00a8ff', baseRate: 0.24, img: 'flowers/detective.png', fallbackFilter: 'hue-rotate(40deg) saturate(1.5)' },
+      scientist: { id: 'scientist', name: 'Учёный', tier: 'Необычный (Uncommon)', tierKey: 'uncommon', color: '#00a8ff', baseRate: 0.25, img: 'flowers/scientist.png', fallbackFilter: 'hue-rotate(300deg) saturate(1.5)' },
+      fire: { id: 'fire', name: 'Огненный', tier: 'Редкий (Rare)', tierKey: 'rare', color: '#e1b12c', baseRate: 0.3, img: 'flowers/fire.png', fallbackFilter: 'hue-rotate(151deg) saturate(1.5)' },
+      ice: { id: 'ice', name: 'Ледяной', tier: 'Редкий (Rare)', tierKey: 'rare', color: '#e1b12c', baseRate: 0.32, img: 'flowers/ice.png', fallbackFilter: 'hue-rotate(168deg) saturate(1.5)' },
+      storm: { id: 'storm', name: 'Грозовой', tier: 'Редкий (Rare)', tierKey: 'rare', color: '#e1b12c', baseRate: 0.35, img: 'flowers/storm.png', fallbackFilter: 'hue-rotate(199deg) saturate(1.5)' },
+      spirit: { id: 'spirit', name: 'Лесной дух', tier: 'Редкий (Rare)', tierKey: 'rare', color: '#e1b12c', baseRate: 0.38, img: 'flowers/spirit.png', fallbackFilter: 'hue-rotate(259deg) saturate(1.5)' },
+      candy: { id: 'candy', name: 'Сладкий', tier: 'Редкий (Rare)', tierKey: 'rare', color: '#e1b12c', baseRate: 0.4, img: 'flowers/candy.png', fallbackFilter: 'hue-rotate(125deg) saturate(1.5)' },
+      disco: { id: 'disco', name: 'Диско', tier: 'Редкий (Rare)', tierKey: 'rare', color: '#e1b12c', baseRate: 0.42, img: 'flowers/disco.png', fallbackFilter: 'hue-rotate(267deg) saturate(1.5)' },
+      ghost: { id: 'ghost', name: 'Призрак', tier: 'Редкий (Rare)', tierKey: 'rare', color: '#e1b12c', baseRate: 0.45, img: 'flowers/ghost.png', fallbackFilter: 'hue-rotate(284deg) saturate(1.5)' },
+      cyber: { id: 'cyber', name: 'Кибер-подсолнух', tier: 'Эпический (Epic)', tierKey: 'epic', color: '#9c88ff', baseRate: 0.5, img: 'flowers/cyber.png', fallbackFilter: 'hue-rotate(260deg) saturate(1.5)' },
+      dragon: { id: 'dragon', name: 'Драконий', tier: 'Эпический (Epic)', tierKey: 'epic', color: '#9c88ff', baseRate: 0.55, img: 'flowers/dragon.png', fallbackFilter: 'hue-rotate(297deg) saturate(1.5)' },
+      steampunk: { id: 'steampunk', name: 'Стимпанк', tier: 'Эпический (Epic)', tierKey: 'epic', color: '#9c88ff', baseRate: 0.65, img: 'flowers/steampunk.png', fallbackFilter: 'hue-rotate(112deg) saturate(1.5)' },
+      crystal: { id: 'crystal', name: 'Кристальный', tier: 'Эпический (Epic)', tierKey: 'epic', color: '#9c88ff', baseRate: 0.75, img: 'flowers/crystal.png', fallbackFilter: 'hue-rotate(173deg) saturate(1.5)' },
+      shadow: { id: 'shadow', name: 'Теневой', tier: 'Эпический (Epic)', tierKey: 'epic', color: '#9c88ff', baseRate: 0.9, img: 'flowers/shadow.png', fallbackFilter: 'hue-rotate(134deg) saturate(1.5)' },
+      cosmic: { id: 'cosmic', name: 'Космический', tier: 'Легендарный (Legendary)', tierKey: 'legendary', color: '#fbc531', baseRate: 1.5, img: 'flowers/cosmic.png', fallbackFilter: 'hue-rotate(45deg) saturate(1.5)' },
+      golden: { id: 'golden', name: 'Золотой король', tier: 'Легендарный (Legendary)', tierKey: 'legendary', color: '#fbc531', baseRate: 2.2, img: 'flowers/golden.png', fallbackFilter: 'hue-rotate(47deg) saturate(1.5)' },
+      worldtree: { id: 'worldtree', name: 'Мировое древо', tier: 'Мифический (Mythic)', tierKey: 'mythic', color: '#ff4757', baseRate: 4.5, img: 'flowers/worldtree.png', fallbackFilter: 'hue-rotate(249deg) saturate(1.5)' }
+    };
+
+    // Шанс выпадения из семечка по редкости (в сумме 100)
+    const TIER_WEIGHTS = { common: 45, uncommon: 25, rare: 15, epic: 9, legendary: 5, mythic: 1 };
+
+    function pickRandomFlower() {
+      let roll = Math.random() * 100;
+      let tier = 'common';
+      for (const t in TIER_WEIGHTS) {
+        if (roll < TIER_WEIGHTS[t]) { tier = t; break; }
+        roll -= TIER_WEIGHTS[t];
+      }
+      const pool = Object.values(ALL_FLOWERS).filter(f => f.tierKey === tier);
+      return pool[Math.floor(Math.random() * pool.length)].id;
+    }
+
+    function defaultState() {
+      return {
+        suns: 0,
+        starsSpent: 0,
+        activeFlowerId: 'gardener',
+        ownedFlowers: ['gardener'],
+        seeds: { standard: 1 },
+        fertilizers: 1,
+        boostTimer: 0,
+        upgrades: { pot: 0, sprout: 0, sunlight: 0 },
+        activatedPromos: [],
+        pendingSuns: 0,
+        cooldownEnd: 0,
+        applied: { seed: 0, fert: 0, stars: 0 },
+        savedAt: 0,
+        lastSeen: 0,
+        settings: { sound: true, haptic: true, fx: true }
+      };
+    }
+
+    function normalizeState(raw) {
+      const st = Object.assign(defaultState(), raw || {});
+      st.upgrades = Object.assign({ pot: 0, sprout: 0, sunlight: 0 }, st.upgrades);
+      st.applied = Object.assign({ seed: 0, fert: 0, stars: 0 }, st.applied);
+      st.seeds = Object.assign({ standard: 0 }, st.seeds);
+      st.settings = Object.assign({ sound: true, haptic: true, fx: true }, st.settings);
+      if (!Array.isArray(st.ownedFlowers) || !st.ownedFlowers.length) st.ownedFlowers = ['gardener'];
+      if (!Array.isArray(st.activatedPromos)) st.activatedPromos = [];
+      return st;
+    }
+
+    // Прогресс привязан к ID пользователя Telegram
+    const TG_UID = tg && tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : null;
+    const SAVE_KEY = 'pvz_sunflower_save' + (TG_UID ? '_' + TG_UID : '');
+
+    let state = defaultState();
+    try {
+      const saved = localStorage.getItem(SAVE_KEY) || localStorage.getItem('pvz_sunflower_save');
+      if (saved) state = normalizeState(JSON.parse(saved));
+    } catch (e) {}
+
+    let pendingSuns = state.pendingSuns || 0;
+    let cooldown = 0;
+    const COOLDOWN_MAX = 15;
+
+    function restoreCooldown() {
+      cooldown = Math.min(COOLDOWN_MAX, Math.max(0, Math.ceil(((state.cooldownEnd || 0) - Date.now()) / 1000)));
+      renderHud();
+    }
+
+    // ---------- Сервер: сохранение в облаке ----------
+    const SYNC_ON = !!(tg && tg.initData && !BACKEND_URL.includes('YOUR-WORKER'));
+    let serverReady = false;
+    let serverSaveTimer = null;
+    let serverSaveDue = 0;
+    let serverSaving = false;
+    let authWarned = false;
+    let lastCloudOk = 0;
+
+    async function api(path, body, keepalive) {
+      const r = await fetch(BACKEND_URL + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({ initData: tg.initData }, body || {})),
+        keepalive: !!keepalive
+      });
+      if (r.status === 401 && !authWarned) {
+        authWarned = true;
+        notify('Сессия устарела. Закрой игру и открой заново, чтобы прогресс сохранялся.');
+      }
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    }
+
+    function scheduleServerSave(delay) {
+      if (!SYNC_ON || !serverReady) return;
+      const due = Date.now() + delay;
+      if (serverSaveTimer) {
+        if (serverSaveDue <= due) return;
+        clearTimeout(serverSaveTimer);
+      }
+      serverSaveDue = due;
+      serverSaveTimer = setTimeout(() => doServerSave(false), delay);
+    }
+
+    async function doServerSave(keepalive) {
+      if (serverSaveTimer) { clearTimeout(serverSaveTimer); serverSaveTimer = null; }
+      if (!SYNC_ON || !serverReady) return false;
+      if (serverSaving) { scheduleServerSave(3000); return false; }
+      serverSaving = true;
+      let ok = false;
+      try {
+        await api('/save', { state: state }, keepalive);
+        lastCloudOk = Date.now();
+        ok = true;
+      } catch (e) {
+        scheduleServerSave(20000);
+      } finally {
+        serverSaving = false;
+      }
+      return ok;
+    }
+
+    // low=true: частое фоновое сохранение (раз в ~20 с), иначе почти сразу
+    function saveState(low) {
+      state.pendingSuns = pendingSuns;
+      state.savedAt = Date.now();
+      state.lastSeen = state.savedAt;
+      try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {}
+      scheduleServerSave(low ? 20000 : 1500);
+    }
+
+    // Покупки за звёзды хранятся на сервере как итоговые суммы.
+    // Разницу с уже начисленным добавляем один раз (state.applied едет вместе с прогрессом).
+    function applyTotals(t) {
+      if (!t) return false;
+      let changed = false;
+      const a = state.applied;
+      const dSeed = (t.seed || 0) - a.seed;
+      const dFert = (t.fert || 0) - a.fert;
+      const dStars = (t.stars || 0) - a.stars;
+      if (dSeed > 0) { state.seeds.standard = (state.seeds.standard || 0) + dSeed; a.seed = t.seed; changed = true; }
+      if (dFert > 0) { state.fertilizers += dFert; a.fert = t.fert; changed = true; }
+      if (dStars > 0) { state.starsSpent += dStars; a.stars = t.stars; changed = true; }
+      if (changed) {
+        saveState();
+        renderHud();
+      }
+      return changed;
+    }
+
+    function refreshAfterStateChange() {
+      pendingSuns = state.pendingSuns || 0;
+      lastTick = state.lastSeen || Date.now();
+      offlineGain = 0;
+      offlineSecs = 0;
+      restoreCooldown();
+      updateActiveDisplay(false);
+      shownSuns = state.suns;
+      renderHud();
+    }
+
+    async function syncLoad() {
+      const d = await api('/load', {});
+      const srv = d.state ? normalizeState(d.state) : null;
+      if (srv && (srv.savedAt || 0) >= (state.savedAt || 0)) {
+        state = srv;
+        refreshAfterStateChange();
+      }
+      serverReady = true;
+      lastCloudOk = Date.now();
+      applyTotals(d.totals);
+      saveState();
+    }
+
+    async function waitForGrants() {
+      for (let i = 0; i < 10; i++) {
+        await new Promise(r => setTimeout(r, 1500));
+        try {
+          const d = await api('/grants', {});
+          if (applyTotals(d.totals)) return true;
+        } catch (e) {}
+      }
+      return false;
+    }
+
+    let currentInvTab = 'flowers';
+
+    function calcBaseIncome() {
+      const active = ALL_FLOWERS[state.activeFlowerId] || ALL_FLOWERS.gardener;
+      const bonus = (state.upgrades.pot * 0.001) +
+                    (state.upgrades.sprout * 0.01) +
+                    (state.upgrades.sunlight * 0.1);
+      return active.baseRate + bonus;
+    }
+
+    function calcIncome() {
+      return calcBaseIncome() * (state.boostTimer > 0 ? 2 : 1);
+    }
+
+    // Сколько солнышек накапало за dt секунд (с учётом подкормки, которая тоже тикает)
+    function earn(dt) {
+      const base = calcBaseIncome();
+      const boosted = Math.min(dt, Math.max(0, state.boostTimer));
+      state.boostTimer = Math.max(0, state.boostTimer - dt);
+      return base * (dt - boosted) + base * 2 * boosted;
+    }
+
+    // Солнышки копятся и когда игра закрыта, но не дольше этого времени
+    const OFFLINE_CAP_SEC = 8 * 3600;
+    let lastTick = state.lastSeen || Date.now();
+    let offlineGain = 0;
+    let offlineSecs = 0;
+
+    function announceOffline() {
+      setTimeout(() => {
+        if (offlineGain >= 1) {
+          const mins = Math.max(1, Math.round(offlineSecs / 60));
+          const t = mins >= 60 ? Math.floor(mins / 60) + ' ч ' + (mins % 60) + ' мин' : mins + ' мин';
+          toast('☀️ Пока тебя не было (' + t + '), накопилось +' + Math.floor(offlineGain) + ' солнышек. Нажми «Собрать»!', 'sun', 6000);
+        }
+        offlineGain = 0;
+      }, 1500);
+    }
+
+    let tickCount = 0;
+    setInterval(() => {
+      const now = Date.now();
+      let dt = (now - lastTick) / 1000;
+      lastTick = now;
+      if (dt < 0) dt = 0;
+      if (dt > OFFLINE_CAP_SEC) dt = OFFLINE_CAP_SEC;
+
+      const rate = calcIncome();
+      const gain = earn(dt);
+      pendingSuns += gain;
+      if (dt > 60) { offlineGain = gain; offlineSecs = dt; }
+
+      cooldown = Math.min(COOLDOWN_MAX, Math.max(0, Math.ceil(((state.cooldownEnd || 0) - now) / 1000)));
+      renderHud();
+
+      tickCount++;
+      if (tickCount % 10 === 0) saveState(true);
+    }, 1000);
+
+    // ================== Интерфейс ==================
+    const stage = $('stage');
+    const fxLayer = $('fxLayer');
+    const TIER_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
+    const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    let shownSuns = state.suns;
+    let lastShownId = null;
+    let tweening = false;
+
+    function fxOn() { return state.settings.fx !== false && !reduceMotion; }
+
+    // Короткая запись больших чисел, чтобы всегда влезали в слот
+    function fmt(n) {
+      n = Math.floor(Math.max(0, n));
+      if (n < 100000) return String(n);
+      if (n < 1e6) return Math.floor(n / 1e3) + 'K';
+      if (n < 1e9) return (n < 1e8 ? (n / 1e6).toFixed(1) : String(Math.floor(n / 1e6))) + 'M';
+      return (n < 1e11 ? (n / 1e9).toFixed(1) : String(Math.floor(n / 1e9))) + 'B';
+    }
+
+    function darken(hex, f) {
+      const n = parseInt(hex.slice(1), 16);
+      return 'rgb(' + Math.round(((n >> 16) & 255) * f) + ',' + Math.round(((n >> 8) & 255) * f) + ',' + Math.round((n & 255) * f) + ')';
+    }
+    function rgba(hex, a) {
+      const n = parseInt(hex.slice(1), 16);
+      return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+
+    // Игровое поле всегда 720x1280 и масштабируется целиком: всё стоит точно по нарисованным слотам
+    function fitStage() {
+      const c = $('app');
+      const W = c.clientWidth || window.innerWidth;
+      const H = c.clientHeight || window.innerHeight;
+      const s = Math.min(W / 720, H / 1280);
+      const x = (W - 720 * s) / 2;
+      const y = (H - 1280 * s) / 2;
+      stage.style.transform = 'translate(' + x.toFixed(2) + 'px,' + y.toFixed(2) + 'px) scale(' + s.toFixed(4) + ')';
+      c.style.background = (W / H < 720 / 1280) ? 'linear-gradient(#d4bad5 50%, #1d0b05 50%)' : '#0b0f07';
+    }
+    window.addEventListener('resize', fitStage);
+    window.addEventListener('orientationchange', fitStage);
+    if (tg && tg.onEvent) { try { tg.onEvent('viewportChanged', fitStage); } catch (e) {} }
+    fitStage();
+
+    // ----- Звук (простые 8-битные сигналы, без файлов) -----
+    let actx = null;
+    function audio() {
+      if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+      if (actx.state === 'suspended') { try { actx.resume(); } catch (e) {} }
+      return actx;
+    }
+    function tone(freq, dur, type, vol, delay, slideTo) {
+      const ac = audio();
+      if (!ac) return;
+      const t0 = ac.currentTime + (delay || 0);
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = type || 'square';
+      o.frequency.setValueAtTime(freq, t0);
+      if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+      g.gain.setValueAtTime(vol || 0.05, t0);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(ac.destination);
+      o.start(t0); o.stop(t0 + dur + 0.02);
+    }
+    const SFX = {
+      tap() { tone(660, 0.05, 'square', 0.035); },
+      open() { tone(440, 0.05, 'square', 0.035); tone(660, 0.07, 'square', 0.035, 0.05); },
+      close() { tone(520, 0.06, 'square', 0.03); },
+      pop() { tone(300, 0.1, 'sine', 0.08, 0, 700); },
+      collect() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.09, 'square', 0.045, i * 0.06)); },
+      buy() { tone(880, 0.07, 'square', 0.045); tone(1320, 0.15, 'square', 0.045, 0.07); },
+      error() { tone(200, 0.18, 'sawtooth', 0.045); },
+      reveal(lvl) {
+        const base = [523, 587, 659, 740, 880, 1047][lvl || 0];
+        [1, 1.25, 1.5, 2].slice(0, 2 + Math.min(lvl || 0, 2)).forEach((m, i) => tone(base * m, 0.16, 'square', 0.05, i * 0.1));
+        if ((lvl || 0) >= 3) tone(base * 3, 0.5, 'triangle', 0.05, 0.45);
+      }
+    };
+    function sfx(name, a) {
+      if (state.settings.sound === false) return;
+      try { SFX[name](a); } catch (e) {}
+    }
+    function haptic(kind) {
+      if (state.settings.haptic === false || !tg || !tg.HapticFeedback) return;
+      try {
+        if (kind === 'success' || kind === 'error' || kind === 'warning') tg.HapticFeedback.notificationOccurred(kind);
+        else if (kind === 'select') tg.HapticFeedback.selectionChanged();
+        else tg.HapticFeedback.impactOccurred(kind || 'light');
+      } catch (e) {}
+    }
+
+    // ----- Подсказки -----
+    function toast(msg, kind, ms) {
+      const box = $('toasts');
+      const el = document.createElement('div');
+      el.className = 'toast ' + (kind || 'info');
+      el.textContent = msg;
+      box.appendChild(el);
+      while (box.children.length > 3) box.firstChild.remove();
+      setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 320); }, ms || 2300);
+    }
+
+    // ----- Эффекты -----
+    function bump(el) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+
+    function floatText(text, x, y, color) {
+      if (!fxOn()) return;
+      const el = document.createElement('div');
+      el.className = 'float-text';
+      el.textContent = text;
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
+      if (color) el.style.color = color;
+      fxLayer.appendChild(el);
+      setTimeout(() => el.remove(), 1300);
+    }
+
+    function flySuns(count) {
+      if (!fxOn()) return;
+      for (let i = 0; i < count; i++) {
+        const el = document.createElement('div');
+        el.className = 'fly-sun';
+        el.textContent = '☀️';
+        const sx = 360 + (Math.random() - 0.5) * 240;
+        const sy = 560 + (Math.random() - 0.5) * 160;
+        el.style.left = sx + 'px';
+        el.style.top = sy + 'px';
+        fxLayer.appendChild(el);
+        const a = el.animate([
+          { transform: 'translate(0,0) scale(.4)', opacity: 0 },
+          { transform: 'translate(0,-50px) scale(1.15)', opacity: 1, offset: 0.25 },
+          { transform: 'translate(' + (246 - sx) + 'px,' + (72 - sy) + 'px) scale(.7)', opacity: 0.95 }
+        ], { duration: 760, delay: i * 70, easing: 'cubic-bezier(.45,.05,.75,.45)', fill: 'forwards' });
+        a.onfinish = () => { el.remove(); bump($('hudSuns')); };
+      }
+    }
+
+    function burstDots(x, y, n, color) {
+      for (let i = 0; i < n; i++) {
+        const el = document.createElement('div');
+        el.className = 'dot';
+        if (color) { el.style.background = color; el.style.boxShadow = '0 0 10px ' + color; }
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+        fxLayer.appendChild(el);
+        const ang = (Math.PI * 2 * i) / n + Math.random() * 0.5;
+        const dist = 70 + Math.random() * 70;
+        const a = el.animate([
+          { transform: 'translate(0,0) scale(1)', opacity: 1 },
+          { transform: 'translate(' + Math.cos(ang) * dist + 'px,' + (Math.sin(ang) * dist - 30) + 'px) scale(0)', opacity: 0 }
+        ], { duration: 550 + Math.random() * 200, easing: 'ease-out', fill: 'forwards' });
+        a.onfinish = () => el.remove();
+      }
+    }
+
+    function sparkle(color) {
+      const el = document.createElement('div');
+      el.className = 'sparkle';
+      el.style.setProperty('--c', color);
+      el.style.left = (190 + Math.random() * 340) + 'px';
+      el.style.top = (330 + Math.random() * 420) + 'px';
+      fxLayer.appendChild(el);
+      setTimeout(() => el.remove(), 1450);
+    }
+    setInterval(() => {
+      if (!fxOn() || document.hidden) return;
+      const f = ALL_FLOWERS[state.activeFlowerId];
+      if (!f) return;
+      const lvl = TIER_ORDER.indexOf(f.tierKey);
+      if (lvl <= 0) return;
+      if (Math.random() < 0.15 + lvl * 0.14) {
+        sparkle(f.color);
+        if (lvl >= 5) sparkle('#ffffff');
+      }
+    }, 450);
+
+    // Лёгкие светлячки на фоне
+    (function makeMotes() {
+      const box = $('motes');
+      for (let i = 0; i < 10; i++) {
+        const m = document.createElement('div');
+        m.className = 'mote';
+        m.style.left = (40 + Math.random() * 640) + 'px';
+        m.style.top = (560 + Math.random() * 280) + 'px';
+        m.style.setProperty('--d', (8 + Math.random() * 6).toFixed(1) + 's');
+        m.style.setProperty('--dl', (-Math.random() * 12).toFixed(1) + 's');
+        box.appendChild(m);
+      }
+    })();
+    stage.classList.toggle('nofx', !fxOn());
+
+    // ----- Цветок -----
+    function fitText(el, maxW, base) {
+      el.style.fontSize = base + 'px';
+      let s = base;
+      while (el.scrollWidth > maxW && s > 12) { s -= 1; el.style.fontSize = s + 'px'; }
+    }
+
+    function updateActiveDisplay(animate) {
+      const flower = ALL_FLOWERS[state.activeFlowerId] || ALL_FLOWERS.gardener;
+      const sprite = $('plantSprite');
+      sprite.style.filter = '';
+      sprite.onerror = () => {
+        sprite.onerror = null;
+        sprite.style.filter = flower.fallbackFilter || '';
+        sprite.src = 'flowers/gardener.png';
+      };
+      sprite.src = flower.img;
+      $('nameLabel').textContent = flower.name;
+      fitText($('nameLabel'), 390, 26);
+      const tl = $('tierLabel');
+      tl.textContent = flower.tier;
+      tl.style.color = darken(flower.color, 0.62);
+      fitText(tl, 400, 16);
+
+      const lvl = Math.max(0, TIER_ORDER.indexOf(flower.tierKey));
+      const aura = $('flowerAura');
+      aura.style.setProperty('--aura', rgba(flower.color, 0.8));
+      aura.style.opacity = [0, 0.16, 0.28, 0.4, 0.55, 0.7][lvl];
+
+      if (animate && lastShownId && lastShownId !== flower.id && fxOn()) {
+        sprite.classList.remove('squash', 'popin');
+        void sprite.offsetWidth;
+        sprite.classList.add('popin');
+        burstDots(360, 600, 10, flower.color);
+        sfx('pop');
+      }
+      lastShownId = flower.id;
+    }
+    $('plantSprite').addEventListener('animationend', (e) => {
+      if (e.animationName === 'squash' || e.animationName === 'popin') $('plantSprite').classList.remove('squash', 'popin');
+    });
+
+    let lastTap = 0;
+    $('plantSprite').addEventListener('pointerdown', () => {
+      const now = Date.now();
+      if (now - lastTap < 140) return;
+      lastTap = now;
+      sfx('tap');
+      haptic('light');
+      if (!fxOn()) return;
+      const img = $('plantSprite');
+      img.classList.remove('squash', 'popin');
+      void img.offsetWidth;
+      img.classList.add('squash');
+      burstDots(360, 520, 6);
+    });
+
+    // ----- Верхняя панель -----
+    function drawSuns() { $('sunCount').textContent = fmt(shownSuns); }
+    function tweenSuns() {
+      if (tweening) return;
+      tweening = true;
+      (function step() {
+        const d = state.suns - shownSuns;
+        if (Math.abs(d) < 0.8) { shownSuns = state.suns; tweening = false; drawSuns(); return; }
+        shownSuns += d * 0.16;
+        drawSuns();
+        requestAnimationFrame(step);
+      })();
+    }
+
+    const UPGRADES = [
+      { key: 'pot', name: 'Горшочек', rate: '+0.001 в сек', base: 15, grow: 1.3, emoji: '🪴' },
+      { key: 'sprout', name: 'Росток', rate: '+0.01 в сек', base: 80, grow: 1.35, emoji: '🌱' },
+      { key: 'sunlight', name: 'Солнечный свет', rate: '+0.1 в сек', base: 400, grow: 1.4, emoji: '☀️' }
+    ];
+    function upCost(it) { return Math.floor(it.base * Math.pow(it.grow, state.upgrades[it.key] || 0)); }
+
+    function updateBadges() {
+      const cheapest = Math.min.apply(null, UPGRADES.map(upCost));
+      $('badgeUp').classList.toggle('on', state.suns >= cheapest);
+      const inv = (state.seeds.standard || 0) + (state.fertilizers || 0);
+      const b = $('badgeInv');
+      b.textContent = inv > 9 ? '9+' : String(inv);
+      b.classList.toggle('on', inv > 0);
+    }
+
+    function renderHud() {
+      if (Math.abs(state.suns - shownSuns) >= 1 && fxOn()) tweenSuns();
+      else { shownSuns = state.suns; drawSuns(); }
+      $('starCount').textContent = fmt(state.starsSpent);
+      $('pendingCount').textContent = pendingSuns < 1000 ? pendingSuns.toFixed(1) : fmt(pendingSuns);
+      const rate = calcIncome();
+      $('incomeRate').textContent = rate < 10 ? rate.toFixed(3) : rate.toFixed(2);
+
+      const bt = $('boostTag');
+      if (state.boostTimer > 0) { bt.textContent = '⚡ x2 ещё ' + Math.ceil(state.boostTimer) + 'с'; bt.classList.add('on'); }
+      else bt.classList.remove('on');
+
+      const btn = $('claimBtn');
+      const cooling = cooldown > 0;
+      btn.classList.toggle('disabled', cooling);
+      btn.classList.toggle('ready', !cooling && pendingSuns >= 1);
+      $('claimText').textContent = cooling ? cooldown + 'с' : 'Собрать';
+      $('cdFill').style.transform = 'scaleX(' + (cooling ? Math.min(1, cooldown / COOLDOWN_MAX) : 0) + ')';
+      updateBadges();
+    }
+
+    function claimSuns() {
+      if (cooldown > 0) return;
+      if (pendingSuns < 0.1) {
+        toast('Пока нечего собирать', 'info');
+        sfx('error');
+        haptic('warning');
+        return;
+      }
+      const gained = pendingSuns;
+      state.suns += gained;
+      pendingSuns = 0;
+      cooldown = COOLDOWN_MAX;
+      state.cooldownEnd = Date.now() + COOLDOWN_MAX * 1000;
+
+      renderHud();
+      floatText('+' + (gained < 1000 ? gained.toFixed(1) : fmt(gained)) + ' ☀️', 360, 500);
+      flySuns(Math.min(9, 3 + Math.floor(Math.log10(gained + 1) * 2)));
+      sfx('collect');
+      haptic('success');
+      saveState();
+    }
+
+    // ----- Окна -----
+    function openModal(id) {
+      const m = $(id);
+      m.style.display = 'flex';
+      m.classList.remove('pop');
+      void m.offsetWidth;
+      m.classList.add('pop');
+      sfx('open');
+      haptic('select');
+    }
+    function closeModal(id) {
+      $(id).style.display = 'none';
+      sfx('close');
+    }
+
+    function makeCard(o) {
+      const card = document.createElement('div');
+      card.className = 'list-card' + (o.cls ? ' ' + o.cls : '');
+      const ico = document.createElement('div');
+      ico.className = 'card-ico';
+      if (o.img) {
+        const im = document.createElement('img');
+        im.src = o.img;
+        im.onerror = () => { im.remove(); ico.textContent = o.emoji || '🌻'; };
+        ico.appendChild(im);
+      } else {
+        ico.textContent = o.emoji || '';
+      }
+      const body = document.createElement('div');
+      body.className = 'card-body';
+      body.innerHTML = o.html;
+      card.appendChild(ico);
+      card.appendChild(body);
+      if (o.btn) {
+        const b = document.createElement('button');
+        b.className = 'action-btn' + (o.btn.cls ? ' ' + o.btn.cls : '');
+        b.textContent = o.btn.text;
+        b.disabled = !!o.btn.disabled;
+        b.onclick = o.btn.onClick;
+        card.appendChild(b);
+      }
+      return card;
+    }
+
+    function switchInvTab(tab) {
+      currentInvTab = tab;
+      ['Flowers', 'Seeds', 'Boosts'].forEach(t => $('tab' + t).classList.remove('active'));
+      $('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+
+      const list = $('invList');
+      list.innerHTML = '';
+
+      if (tab === 'flowers') {
+        const owned = state.ownedFlowers.filter(id => ALL_FLOWERS[id])
+          .sort((x, y) => ALL_FLOWERS[y].baseRate - ALL_FLOWERS[x].baseRate);
+        const hint = document.createElement('div');
+        hint.className = 'hint';
+        hint.textContent = 'Собрано: ' + owned.length + ' из ' + Object.keys(ALL_FLOWERS).length;
+        list.appendChild(hint);
+        owned.forEach(id => {
+          const f = ALL_FLOWERS[id];
+          const isCurrent = state.activeFlowerId === id;
+          list.appendChild(makeCard({
+            img: f.img, emoji: '🌻',
+            html: '<div class="card-title" style="color:' + f.color + '">' + f.name + '</div>' +
+                  '<div class="card-sub">' + f.tier + '</div>' +
+                  '<div class="card-sub">+' + f.baseRate + ' в сек</div>',
+            btn: {
+              text: isCurrent ? 'В саду' : 'Выбрать',
+              disabled: isCurrent,
+              onClick: () => {
+                state.activeFlowerId = f.id;
+                updateActiveDisplay(true);
+                renderHud();
+                saveState();
+                haptic('select');
+                switchInvTab('flowers');
+              }
+            }
+          }));
+        });
+      } else if (tab === 'seeds') {
+        const n = state.seeds.standard || 0;
+        list.appendChild(makeCard({
+          emoji: '🌰',
+          html: '<div class="card-title">Таинственное семечко</div><div class="card-sub">В наличии: ' + n + ' шт.</div>',
+          btn: {
+            text: 'Посадить',
+            disabled: !n,
+            onClick: () => {
+              state.seeds.standard--;
+              const wonId = pickRandomFlower();
+              const isNew = !state.ownedFlowers.includes(wonId);
+              if (isNew) state.ownedFlowers.push(wonId);
+              state.activeFlowerId = wonId;
+              updateActiveDisplay(false);
+              renderHud();
+              saveState();
+              closeModal('inventoryModal');
+              showReveal(wonId, isNew);
+            }
+          }
+        }));
+      } else if (tab === 'boosts') {
+        list.appendChild(makeCard({
+          emoji: '🧪',
+          html: '<div class="card-title">Подкормка</div><div class="card-sub">Доход x2 на 60 секунд</div><div class="card-sub">В наличии: ' + state.fertilizers + ' шт.</div>',
+          btn: {
+            text: 'Применить',
+            disabled: state.fertilizers <= 0,
+            onClick: () => {
+              state.fertilizers--;
+              state.boostTimer = 60;
+              renderHud();
+              saveState();
+              sfx('buy');
+              haptic('success');
+              toast('⚡ Подкормка: доход x2 на 60 секунд!', 'ok');
+              switchInvTab('boosts');
+            }
+          }
+        }));
+      }
+    }
+
+    function renderUpgrades(boughtKey) {
+      const list = $('upgradesList');
+      list.innerHTML = '';
+      const hint = document.createElement('div');
+      hint.className = 'hint';
+      hint.textContent = 'У тебя: ' + fmt(state.suns) + ' ☀️';
+      list.appendChild(hint);
+      UPGRADES.forEach(it => {
+        const cost = upCost(it);
+        const can = state.suns >= cost;
+        list.appendChild(makeCard({
+          emoji: it.emoji,
+          cls: boughtKey === it.key ? 'flash' : '',
+          html: '<div class="card-title">' + it.name + '</div>' +
+                '<div class="card-sub">Уровень ' + (state.upgrades[it.key] || 0) + ' · ' + it.rate + '</div>' +
+                '<div class="card-price">' + fmt(cost) + ' ☀️</div>',
+          btn: {
+            text: 'Купить',
+            cls: can ? '' : 'dim',
+            onClick: () => {
+              if (state.suns < cost) {
+                toast('Не хватает солнышек', 'err');
+                sfx('error');
+                haptic('warning');
+                return;
+              }
+              state.suns -= cost;
+              state.upgrades[it.key]++;
+              renderHud();
+              saveState();
+              sfx('buy');
+              haptic('success');
+              renderUpgrades(it.key);
+            }
+          }
+        }));
+      });
+    }
+
+    // Цены только для показа. Реальную цену берёт сервер (worker.js)
+    const SHOP_ITEMS = [
+      { key: 'seed', name: 'Таинственное семечко', desc: 'Шанс на редкий цветок', stars: 25, emoji: '🌰' },
+      { key: 'fert', name: 'Подкормка x3', desc: 'Доход x2, 3 штуки', stars: 25, emoji: '🧪' }
+    ];
+
+    let buying = false;
+
+    async function buyWithStars(item) {
+      if (buying) return;
+      if (!tg || !tg.openInvoice || !tg.initData) {
+        toast('Покупки работают только внутри Telegram', 'err', 3200);
+        return;
+      }
+      if (!SYNC_ON) {
+        toast('Сервер оплаты ещё не подключён', 'err', 3200);
+        return;
+      }
+      buying = true;
+      try {
+        const d = await api('/invoice', { item: item.key });
+        if (!d.link) throw new Error('no link');
+
+        tg.openInvoice(d.link, async (status) => {
+          if (status === 'paid') {
+            toast('Оплачено, начисляем...', 'info', 2500);
+            const ok = await waitForGrants();
+            buying = false;
+            if (ok) { sfx('buy'); haptic('success'); }
+            toast(ok ? '✅ Спасибо за покупку! Всё уже в инвентаре'
+                     : '✅ Оплата прошла. Покупка появится в течение минуты',
+                  'ok', 4200);
+          } else {
+            buying = false;
+            if (status === 'failed') toast('Оплата не прошла', 'err');
+          }
+        });
+      } catch (e) {
+        buying = false;
+        toast('Не удалось создать счёт, попробуй позже', 'err', 3200);
+      }
+    }
+
+    function renderShop() {
+      const list = $('shopList');
+      list.innerHTML = '';
+      const hint = document.createElement('div');
+      hint.className = 'hint';
+      hint.textContent = 'Первое семечко было бесплатным. Дальше за Telegram Stars.';
+      list.appendChild(hint);
+      SHOP_ITEMS.forEach(item => {
+        list.appendChild(makeCard({
+          emoji: item.emoji,
+          html: '<div class="card-title">' + item.name + '</div><div class="card-sub">' + item.desc + '</div><div class="card-price">' + item.stars + ' ⭐</div>',
+          btn: { text: 'Купить', onClick: () => buyWithStars(item) }
+        }));
+      });
+    }
+
+    // ----- Выпал цветок -----
+    function showReveal(flowerId, isNew) {
+      const f = ALL_FLOWERS[flowerId];
+      if (!f) return;
+      const lvl = Math.max(0, TIER_ORDER.indexOf(f.tierKey));
+      const ov = $('revealOverlay');
+      const img = $('revealImg');
+      img.onerror = () => { img.onerror = null; img.src = 'flowers/gardener.png'; img.style.filter = f.fallbackFilter || ''; };
+      img.style.filter = '';
+      img.src = f.img;
+      $('revealTitle').textContent = isNew ? 'НОВЫЙ ЦВЕТОК!' : 'ПОВТОР!';
+      const nm = $('revealName');
+      nm.textContent = f.name;
+      nm.style.color = f.color;
+      $('revealTier').textContent = f.tier;
+      $('revealRate').textContent = '+' + f.baseRate + ' ☀️ в сек';
+      $('revealNote').textContent = isNew ? 'Он уже растёт в твоём саду' : 'Такой цветок у тебя уже был';
+
+      ov.classList.remove('show');
+      void ov.offsetWidth;
+      ov.classList.add('show');
+      sfx('reveal', lvl);
+      haptic(lvl >= 3 ? 'success' : 'medium');
+      if (fxOn()) confetti(ov, f.color, 26 + lvl * 14);
+    }
+
+    function confetti(box, color, n) {
+      const colors = [color, '#ffe600', '#ffffff', '#ff7aa8', '#7ad0ff', '#9dff7a'];
+      for (let i = 0; i < n; i++) {
+        const el = document.createElement('div');
+        el.className = 'confetti';
+        el.style.background = colors[i % colors.length];
+        box.appendChild(el);
+        const ang = Math.random() * Math.PI * 2;
+        const dist = 120 + Math.random() * 260;
+        const dx = Math.cos(ang) * dist;
+        const dy = Math.sin(ang) * dist - 80;
+        const a = el.animate([
+          { transform: 'translate(0,0) rotate(0)', opacity: 1 },
+          { transform: 'translate(' + dx + 'px,' + dy + 'px) rotate(' + (Math.random() * 540) + 'deg)', opacity: 1, offset: 0.55 },
+          { transform: 'translate(' + (dx * 1.1) + 'px,' + (dy + 260) + 'px) rotate(' + (Math.random() * 720) + 'deg)', opacity: 0 }
+        ], { duration: 1500 + Math.random() * 700, easing: 'cubic-bezier(.2,.7,.4,1)', fill: 'forwards' });
+        a.onfinish = () => el.remove();
+      }
+    }
+    $('revealOk').onclick = () => { $('revealOverlay').classList.remove('show'); sfx('close'); };
+
+    // ----- Настройки -----
+    function updateCloudStatus() {
+      const el = $('setCloud');
+      let t, cls;
+      if (!SYNC_ON) { t = 'Только на этом устройстве'; cls = 'warn'; }
+      else if (!serverReady) { t = 'Нет связи, пробуем снова'; cls = 'bad'; }
+      else {
+        const sec = Math.max(0, Math.round((Date.now() - lastCloudOk) / 1000));
+        t = '☁️ Сохранено ' + (sec < 5 ? 'только что' : sec < 90 ? sec + ' с назад' : Math.round(sec / 60) + ' мин назад');
+        cls = 'good';
+      }
+      el.textContent = t;
+      el.className = 'set-val ' + cls;
+    }
+    function renderSettings() {
+      ['sound', 'haptic', 'fx'].forEach(k => $('sw_' + k).classList.toggle('on', state.settings[k] !== false));
+      $('setUid').textContent = TG_UID ? String(TG_UID) : 'гость';
+      updateCloudStatus();
+    }
+    function toggleSetting(k) {
+      state.settings[k] = state.settings[k] === false;
+      if (k === 'fx') stage.classList.toggle('nofx', !fxOn());
+      saveState();
+      renderSettings();
+      sfx('tap');
+      haptic('select');
+    }
+    ['sound', 'haptic', 'fx'].forEach(k => { $('sw_' + k).onclick = () => toggleSetting(k); });
+    setInterval(() => { if ($('settingsModal').style.display === 'flex') updateCloudStatus(); }, 1000);
+
+    $('btnSaveNow').onclick = async () => {
+      saveState();
+      if (!SYNC_ON) { toast('Сохранено на этом устройстве', 'ok'); return; }
+      const ok = await doServerSave(false);
+      toast(ok ? '☁️ Прогресс сохранён' : 'Нет связи с сервером', ok ? 'ok' : 'err');
+      updateCloudStatus();
+    };
+
+    // ----- Кнопки -----
+    document.addEventListener('touchstart', () => {}, { passive: true });
+    $('claimBtn').onclick = claimSuns;
+    $('btnSettings').onclick = () => { renderSettings(); openModal('settingsModal'); };
+    $('btnInv').onclick = () => { switchInvTab(currentInvTab); openModal('inventoryModal'); };
+    $('btnShop').onclick = () => { renderShop(); openModal('shopModal'); };
+    $('btnUpgrades').onclick = () => { renderUpgrades(); openModal('upgradesModal'); };
+    $('btnEvents').onclick = () => { toast('🏆 Ивенты откроются в следующем обновлении!', 'info', 3000); sfx('tap'); haptic('light'); };
+
+    $('closeInv').onclick = () => closeModal('inventoryModal');
+    $('closeUpgrades').onclick = () => closeModal('upgradesModal');
+    $('closeShop').onclick = () => closeModal('shopModal');
+    $('closePromo').onclick = () => closeModal('promoModal');
+    $('closeSettings').onclick = () => closeModal('settingsModal');
+
+    $('tabFlowers').onclick = () => { switchInvTab('flowers'); sfx('tap'); };
+    $('tabSeeds').onclick = () => { switchInvTab('seeds'); sfx('tap'); };
+    $('tabBoosts').onclick = () => { switchInvTab('boosts'); sfx('tap'); };
+
+    $('btnOpenPromo').onclick = () => { closeModal('inventoryModal'); openModal('promoModal'); };
+    $('btnSettingsPromo').onclick = () => { closeModal('settingsModal'); openModal('promoModal'); };
+
+    // Промокоды: измени/добавь свои
+    const PROMOS = {
+      'SUNFLOWER': { seeds: 1 },
+      'START':     { fertilizers: 2 },
+      'GIFT':      { seeds: 1 }
+    };
+
+    $('btnApplyPromo').onclick = () => {
+      const input = $('promoInput');
+      const code = input.value.trim().toUpperCase();
+      if (!code) return;
+      if (state.activatedPromos.includes(code)) { toast('Этот код уже активирован', 'err'); sfx('error'); return; }
+      const reward = PROMOS[code];
+      if (!reward) { toast('Неверный промокод', 'err'); sfx('error'); haptic('warning'); return; }
+
+      if (reward.seeds) state.seeds.standard = (state.seeds.standard || 0) + reward.seeds;
+      if (reward.fertilizers) state.fertilizers += reward.fertilizers;
+      state.activatedPromos.push(code);
+      renderHud();
+      saveState();
+      input.value = '';
+      closeModal('promoModal');
+      sfx('buy');
+      haptic('success');
+      toast('🎁 Промокод активирован!', 'ok', 3000);
+    };
+
+    // Закрытие окон по тапу на тёмный фон
+    document.querySelectorAll('.modal-overlay').forEach(ov => {
+      ov.addEventListener('click', e => { if (e.target === ov) closeModal(ov.id); });
+    });
+
+    updateActiveDisplay(false);
+    renderHud();
+    // когда загрузится пиксельный шрифт, подгоняем длинные названия по ширине
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => updateActiveDisplay(false));
+
+    restoreCooldown();
+
+    // Экран загрузки, пока подтягивается прогресс с сервера
+    (async function boot() {
+      if (!SYNC_ON) { announceOffline(); return; }
+      const ov = document.createElement('div');
+      ov.className = 'loading';
+      ov.innerHTML = '<div class="sun">☀️</div><div>Загрузка...</div>';
+      document.body.appendChild(ov);
+      try {
+        await Promise.race([
+          syncLoad(),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000))
+        ]);
+      } catch (e) {}
+      ov.remove();
+      announceOffline();
+      if (!serverReady) {
+        // нет связи: играем локально и пробуем подключиться позже, ничего не затирая
+        const retry = setInterval(async () => {
+          if (serverReady) { clearInterval(retry); return; }
+          try { await syncLoad(); clearInterval(retry); } catch (e) {}
+        }, 30000);
+      }
+    })();
+
+    // Сохраняем при сворачивании/закрытии, подтягиваем покупки при возвращении
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        saveState();
+        doServerSave(true);
+      } else if (SYNC_ON && serverReady) {
+        api('/grants', {}).then(d => applyTotals(d.totals)).catch(() => {});
+      }
+    });
+    window.addEventListener('pagehide', () => { saveState(); doServerSave(true); });
+  </script>
+</body>
+</html>
